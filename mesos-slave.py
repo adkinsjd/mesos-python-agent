@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 from flask import Flask, request
 app = Flask(__name__)
-import reqeusts
-import messages_pb2
+import requests
+from os.path import abspath
+sys.path.append(abspath('protobufs'))
+import messages.messages_pb2
 
 parser = argparse.ArgumentParser(description='Apache Mesos Agent.')
 parser.add_argument('--master', type=str, help='URI of the Mesos Master', required=True)
