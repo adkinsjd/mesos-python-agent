@@ -148,16 +148,61 @@ class AgentProcess(ProtobufProcess):
     @ProtobufProcess.install(internal.StatusUpdateMessage)
     def statusUpdate(self, from_pid, message):
         # The executor tells us status updates about the tasks which we acknowledge
+
+        # We also forward the status updates to the master
+
+        print("Received status update for task ", message.update.status.task_id.value, "with state", message.update.status.state)
+        ack = internal.StatusUpdateAcknowledgementMessage()
+        ack.slave_id.CopyFrom(message.update.slave_id)
+        ack.framework_id.CopyFrom(message.update.framework_id)
+        ack.task_id.CopyFrom(message.update.status.task_id)
+        ack.uuid = message.update.uuid
+
+        #find the task in our task list
+        for task in self.taskList:
+            if(task['task'].task.executor.executor_id.value == message.update.executor_id.value and
+               task['task'].framework.id.value == message.update.framework_id.value and
+               task['task'].task.task_id.value == message.update.status.task_id.value):
+
+                print("Found matching task. Updating state")
+                task['state'] = str(message.update.status.state)
+
+                #if it was in our task list send to maasterack the state update
+                print("Forwarding status update to master")
+                statusUpdate = internal.StatusUpdateMessage()
+                statusUpdate.CopyFrom(message)
+                statusUpdate.pid = str(self.pid)
+                self.send(self.masterPID, statusUpdate)
+
+                print("Acknowledging status update")
+                self.send(from_pid, ack)
+
+        print()
+
+    @ProtobufProcess.install(internal.StatusUpdateAcknowledgementMessage)
+    def statusUpdateAcknowledgement(self, from_pid, message):
+        # We can probably just drop these for now. Eventually it will have to be implemented
         pass
+
 
     @ProtobufProcess.install(internal.FrameworkToExecutorMessage)
     def frameworkToExecutor(self, from_pid, message):
-        # I think we need to send these on to the executor
-        pass
+        #Forward framework to executor messages on to the executor
+        print("Received framework to executor message for executor ",
+                message.executor_id.value, "framework", message.framework_id.value)
+
+        for executor in self.registeredExecutorList:
+            if(executor['executor'].framework_id.value == message.framework_id.value and
+               executor['executor'].executor_info.executor_id.value == message.executor_id.value):
+                # fill out the rest of the executor message
+
+                print("Forwarding message to executor pid", executor['pid'])
+                self.send(executor['pid'], message)
+
 
     @ProtobufProcess.install(internal.ExecutorToFrameworkMessage)
     def executorToFramework(self, from_pid, message):
-        # I think we need to send these on to the schedule - probably need to know the PID of that
+        # I think we need to send these on to the scheduler - probably need to know the PID of that
         pass
 
     @ProtobufProcess.install(internal.ShutdownFrameworkMessage)
