@@ -1,13 +1,13 @@
 # Mesos Python Agent
 
-This is a python implementation of a subset of the internal API for an apache
-mesos agent. It's mainly practice to better understand the minimal API that could 
+This is a python implementation of a very basic Apache Mesos agent. 
+It's mainly practice to better understand the minimal API that could 
 be implemented for an embedded C mesos-mini agent meant to run on ultra resource
 constrained platforms. 
 
-The plan is roughly to start with agent registration and pinging, then add
-state and metrics calls (so that it can be viewed in the UI) then add the
-most basic executor functionality (execute a shell command with message passing). 
+It currently is able to handle the executor lifecyle (spawn an executor, forward tasks,
+manage task state, kill the executor), but it doesn't actually limit the resources
+of the executor or tasks.
 
 Down the road this could transition to a more complete example of a mini agent,
 which will probably use COAP instead of HTTP (requiring an HTTP-COAP proxy) and
