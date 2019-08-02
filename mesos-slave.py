@@ -4,6 +4,7 @@ import sys
 import argparse
 from os.path import abspath
 sys.path.append(abspath('protobufs'))
+import os
 
 from compactor import install, spawn, Process, Context
 from compactor.process import ProtobufProcess
@@ -11,6 +12,7 @@ from compactor.pid import PID
 import messages.messages_pb2 as internal
 import mesos.mesos_pb2 as mesos
 import psutil
+import subprocess
 
 parser = argparse.ArgumentParser(description='Apache Mesos Agent.')
 parser.add_argument('--master', type=str, help='URI of the Mesos Master', required=True)
@@ -23,14 +25,12 @@ class AgentProcess(ProtobufProcess):
         self.masterPID = masterPID
         self.registeredExecutorList = []
         self.taskList = []
-        self.slave_info.id = None
         self.slave_info = mesos.SlaveInfo()
         self.slave_info.hostname = "127.0.1.1"
         self.slave_info.port = args.port
-        self.slave_info.version = "1.8.1"
-
 
         super(AgentProcess, self).__init__(agentID)
+
 
 
     @ProtobufProcess.install(internal.PingSlaveMessage)
@@ -51,7 +51,7 @@ class AgentProcess(ProtobufProcess):
     @ProtobufProcess.install(internal.SlaveRegisteredMessage)
     def slaveRegistered(self, from_pid, message):
         #save the slave UUID
-        self.slave_info.id = message.slave_id
+        self.slave_info.id.CopyFrom(message.slave_id)
         print()
         print("Slave registered with: ", message)
         print()
@@ -59,80 +59,111 @@ class AgentProcess(ProtobufProcess):
     @ProtobufProcess.install(internal.RunTaskMessage)
     def runTask(self, from_pid, message):
         # This will start the executor and run the task
+        print("Got task to run: ", message.task.task_id.value)
 
         if(message.launch_executor):
+            print("Task wants to launch executor: ", message.task.executor)
+
+            print("Adding unregistered executor to known executor list")
             #store information about this executor for after it is registered
             executorRegistered = internal.ExecutorRegisteredMessage()
-            executorRegistered.framework_id.CopyFrom(message.framework_id)
+            executorRegistered.framework_id.CopyFrom(message.framework.id)
             executorRegistered.framework_info.CopyFrom(message.framework)
             executorRegistered.executor_info.CopyFrom(message.task.executor)
             executorListItem = {}
-            executorListItem.registered = False
-            executorListItem.exeuctor = executorRegistered
+            executorListItem['registered'] = False
+            executorListItem['executor'] = executorRegistered
             self.registeredExecutorList.append(executorListItem)
 
             # really the executor should be launched with resource limits relative to its task
             # for now I'm just going to spawn it to get the messaging right though
-            # TODO
+
+            print("setting environment variables for executor")
+            os.environ["MESOS_SLAVE_PID"] = str(self.pid)
+            os.environ["MESOS_SLAVE_ID"] = str(self.slave_info.id.value)
+            os.environ["MESOS_FRAMEWORK_ID"] = str(message.framework.id.value)
+            os.environ["MESOS_EXECUTOR_ID"] = str(message.task.executor.executor_id.value)
+            os.environ["MESOS_DIRECTORY"] = "./"
+
+            print("Spawning executor with command: ", message.task.executor.command)
+            pid = subprocess.Popen([message.task.executor.command.value])
 
         for executor in self.registeredExecutorList:
-            if(message.task.executor.executor_id == executor.executor.executor_info.executor_id and executor.registered == True):
+            if(message.task.executor.executor_id == executor['executor'].executor_info.executor_id and executor['registered'] == True):
                 # Now we need to forward the task on to the executor
+                print("Executor registered for this task. Forwarding task to executor: ",
+                        message.task.executor.executor_id,
+                        " with pid ", executor.pid)
+
                 self.send(executor.pid, message)
                 taskListItem = {}
-                taskListItem.task = message
-                taskListItem.state = "DISPATCHED"
+                taskListItem['task'] = message
+                taskListItem['state'] = "DISPATCHED"
                 self.taskList.append(taskListItem)
         else:
             # We can probably just wait until the executor is registered
+            print("Executor not registered for this task. Will forward task after registration")
+
             taskListItem = {}
-            taskListItem.task = message
-            taskListItem.state = "WAITING"
+            taskListItem['task'] = message
+            taskListItem['state'] = "WAITING"
             self.taskList.append(taskListItem)
+
+        print()
 
     @ProtobufProcess.install(internal.RegisterExecutorMessage)
     def registerExecutor(self, from_pid, message):
         # Find the executor with the same framework and ID)
+        print("Request to register executor ", message.executor_id.value, " on framework ", message.framework_id.value)
+
         success = False
         for executor in self.registeredExecutorList:
-            if(executor.executor.framework_id == message.framework_id and
-               executor.executor.executor_info.executor_id == message.executor_id):
+            if(executor['executor'].framework_id.value == message.framework_id.value and
+               executor['executor'].executor_info.executor_id.value == message.executor_id.value):
                 # fill out the rest of the executor message
                 success = True
-                executor.executor.slave_id.CopyFrom(self.slave_info.id)
-                executor.executor.slave_info.CopyFrom(self.slave_info)
-                executor.registered = True
-                executor.pid = from_pid
+                executor['executor'].slave_id.CopyFrom(self.slave_info.id)
+                executor['executor'].slave_info.CopyFrom(self.slave_info)
+                executor['registered'] = True
+                executor['pid'] = from_pid
 
-                self.send(from_pid, executor.executor)
+                self.send(from_pid, executor['executor'])
                 break
 
         if success == True:
             for task in self.taskList:
-                if(task.state == "WAITING" and
-                   task.task.task.executor.executor_id == message.executor_id and
-                   task.framework_id == message.framework_id):
+                if(task['state'] == "WAITING" and
+                   task['task'].task.executor.executor_id.value == message.executor_id.value and
+                   task['task'].framework.id.value == message.framework_id.value):
 
-                    self.send(from_pid, task.task)
-                    task.state = "DISPATCHED"
+                    print("Forwarding task ", task['task'].task.task_id.value, " to executor ", message.executor_id.value)
+
+                    self.send(from_pid, task['task'])
+                    task['state'] = "DISPATCHED"
+                elif(task['state'] == 'WAITING'):
+                    print("Task: ", task['task'], "still waiting to be dispatched")
         else:
             print("ERROR: Did not find matching executor to register. Did not spawn this executor")
 
     @ProtobufProcess.install(internal.StatusUpdateMessage)
     def statusUpdate(self, from_pid, message):
         # The executor tells us status updates about the tasks which we acknowledge
+        pass
 
     @ProtobufProcess.install(internal.FrameworkToExecutorMessage)
     def frameworkToExecutor(self, from_pid, message):
         # I think we need to send these on to the executor
+        pass
 
     @ProtobufProcess.install(internal.ExecutorToFrameworkMessage)
     def executorToFramework(self, from_pid, message):
         # I think we need to send these on to the schedule - probably need to know the PID of that
+        pass
 
     @ProtobufProcess.install(internal.ShutdownFrameworkMessage)
     def shutdownFramework(self, from_pid, message):
         #do something to shutdown the framework...or the executor??
+        pass
 
 
 
@@ -146,7 +177,7 @@ class AgentProcess(ProtobufProcess):
 
         registerSlave = internal.RegisterSlaveMessage()
         registerSlave.slave.CopyFrom(self.slave_info)
-        registerSlave.version = self.slave_info.version
+        registerSlave.version = "1.8.1"
 
         self.send(self.masterPID, registerSlave)
 
@@ -158,7 +189,7 @@ class AgentProcess(ProtobufProcess):
 
         registerSlave = internal.RegisterSlaveMessage()
         registerSlave.slave.CopyFrom(self.slave_info)
-        registerSlave.version = self.slave_info.version
+        registerSlave.version = "1.8.1"
 
         self.send(self.masterPID, registerSlave)
 
