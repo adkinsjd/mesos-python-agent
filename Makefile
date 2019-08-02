@@ -23,6 +23,15 @@ $(OUTPUT_DIR):
 protobuf: $(PROTO_SRC_DIR) $(OUTPUT_DIR)
 	protoc $(MESOS_INCLUDE_DIRS) --python_out=$(OUTPUT_DIR) $(PROTO_SRC)
 
-.PHONY: clean
+.PHONY: clean decode
 clean:
 	rm -rf $(OUTPUT_DIR)
+
+.SILENT: decode
+decode:
+	echo "What is the message type?"; \
+	read messageType;\
+	echo "What is the message binary?"; \
+	read binary; \
+	echo "\n\n";\
+	echo "$$binary" | xxd -r -p - | protoc $(MESOS_INCLUDE_DIRS) --decode=$$messageType $(PROTO_SRC)
