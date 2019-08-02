@@ -86,14 +86,14 @@ class AgentProcess(ProtobufProcess):
             os.environ["MESOS_DIRECTORY"] = "./"
 
             print("Spawning executor with command: ", message.task.executor.command)
-            pid = subprocess.Popen([message.task.executor.command.value])
+            pid = subprocess.Popen([message.task.executor.command.value],preexec_fn=os.setsid)
 
         for executor in self.registeredExecutorList:
             if(message.task.executor.executor_id == executor['executor'].executor_info.executor_id and executor['registered'] == True):
                 # Now we need to forward the task on to the executor
                 print("Executor registered for this task. Forwarding task to executor: ",
                         message.task.executor.executor_id,
-                        " with pid ", executor.pid)
+                        " with pid ", executor['pid'])
 
                 self.send(executor.pid, message)
                 taskListItem = {}
@@ -144,6 +144,7 @@ class AgentProcess(ProtobufProcess):
                     print("Task: ", task['task'], "still waiting to be dispatched")
         else:
             print("ERROR: Did not find matching executor to register. Did not spawn this executor")
+        print()
 
     @ProtobufProcess.install(internal.StatusUpdateMessage)
     def statusUpdate(self, from_pid, message):
@@ -182,7 +183,8 @@ class AgentProcess(ProtobufProcess):
     @ProtobufProcess.install(internal.StatusUpdateAcknowledgementMessage)
     def statusUpdateAcknowledgement(self, from_pid, message):
         # We can probably just drop these for now. Eventually it will have to be implemented
-        pass
+        print("Received status update acknowledgment from", from_pid)
+        print()
 
 
     @ProtobufProcess.install(internal.FrameworkToExecutorMessage)
@@ -199,18 +201,36 @@ class AgentProcess(ProtobufProcess):
                 print("Forwarding message to executor pid", executor['pid'])
                 self.send(executor['pid'], message)
 
+        print()
 
     @ProtobufProcess.install(internal.ExecutorToFrameworkMessage)
     def executorToFramework(self, from_pid, message):
         # I think we need to send these on to the scheduler - probably need to know the PID of that
-        pass
+        print("Received executor to framework message for executor ",
+                message.executor_id.value, "framework", message.framework_id.value)
+
+        print("Forwarding message to master")
+        self.send(self.masterPID, message)
+        print()
 
     @ProtobufProcess.install(internal.ShutdownFrameworkMessage)
     def shutdownFramework(self, from_pid, message):
-        #do something to shutdown the framework...or the executor??
-        pass
+        #send a shutdown executor message to the executor
+        print("Received shutdown framework message for framework", message.framework_id.value)
+        shutdownExecutor = internal.ShutdownExecutorMessage()
+        shutdownExecutor.framework_id.CopyFrom(message.framework_id)
 
+        print("Sending shutdown to executors in framework")
+        for executor in self.registeredExecutorList:
+            if(executor['executor'].framework_id.value == message.framework_id.value):
+                shutdownExecutor.executor_id.CopyFrom(executor['executor'].executor_info.executor_id)
+                print("Shutting down executor with PID",executor['pid'])
+                self.send(executor['pid'], shutdownExecutor)
 
+                #remove executor from registered list
+                print("Removing executor from registered list")
+                self.registeredExecutorList.remove(executor)
+        print()
 
     def register(self):
         #now spawn a client context to send a slave registration message to the master
@@ -224,7 +244,9 @@ class AgentProcess(ProtobufProcess):
         registerSlave.slave.CopyFrom(self.slave_info)
         registerSlave.version = "1.8.1"
 
+        print("Sending slave registration to master")
         self.send(self.masterPID, registerSlave)
+        print()
 
     def reregister(self):
         resources = self.getBasicResources()
