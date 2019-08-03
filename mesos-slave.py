@@ -13,6 +13,7 @@ import messages.messages_pb2 as internal
 import mesos.mesos_pb2 as mesos
 import psutil
 import subprocess
+import uuid
 
 parser = argparse.ArgumentParser(description='Apache Mesos Agent.')
 parser.add_argument('--master', type=str, help='URI of the Mesos Master', required=True)
@@ -62,14 +63,18 @@ class AgentProcess(ProtobufProcess):
         print("Got task to run: ", message.task.task_id.value)
 
         if(message.launch_executor):
-            print("Task wants to launch executor: ", message.task.executor)
+            if(message.task.executor.IsInitialized()):
+                print("Task wants to launch executor: ", message.task.executor)
+            else:
+                print("Task wants to launch executor: ", message.task.command)
 
             print("Adding unregistered executor to known executor list")
             #store information about this executor for after it is registered
             executorRegistered = internal.ExecutorRegisteredMessage()
             executorRegistered.framework_id.CopyFrom(message.framework.id)
             executorRegistered.framework_info.CopyFrom(message.framework)
-            executorRegistered.executor_info.CopyFrom(message.task.executor)
+            if(message.task.executor.IsInitialized()):
+                executorRegistered.executor_info.CopyFrom(message.task.executor)
             executorListItem = {}
             executorListItem['registered'] = False
             executorListItem['executor'] = executorRegistered
@@ -85,8 +90,20 @@ class AgentProcess(ProtobufProcess):
             os.environ["MESOS_EXECUTOR_ID"] = str(message.task.executor.executor_id.value)
             os.environ["MESOS_DIRECTORY"] = "./"
 
-            print("Spawning executor with command: ", message.task.executor.command)
-            pid = subprocess.Popen([message.task.executor.command.value],preexec_fn=os.setsid)
+            if(message.task.executor.IsInitialized()):
+                if(message.task.executor.command.environment):
+                    for variable in message.task.executor.command.environment.variables:
+                        os.environ[variable.name] = variable.value
+                print("Spawning executor with command: ", message.task.executor.command)
+                pid = subprocess.Popen([message.task.executor.command.value],preexec_fn=os.setsid)
+            elif(message.task.command.IsInitialized()):
+                if(message.task.command.environment):
+                    for variable in message.task.command.environment.variables:
+                        os.environ[variable.name] = variable.value
+                print("Spawning executor with command: ", message.task.command.value.strip().replace('"','').split(' '))
+                pid = subprocess.Popen(message.task.command.value.strip().replace('"','').split(' '),preexec_fn=os.setsid)
+            else:
+                print("ERROR: Asked to launch executor, but no executor to launch")
 
         for executor in self.registeredExecutorList:
             if(message.task.executor.executor_id == executor['executor'].executor_info.executor_id and executor['registered'] == True):
@@ -243,6 +260,7 @@ class AgentProcess(ProtobufProcess):
         registerSlave = internal.RegisterSlaveMessage()
         registerSlave.slave.CopyFrom(self.slave_info)
         registerSlave.version = "1.8.1"
+        registerSlave.resource_version_uuid.value = uuid.uuid1().bytes
 
         print("Sending slave registration to master")
         self.send(self.masterPID, registerSlave)
@@ -257,6 +275,7 @@ class AgentProcess(ProtobufProcess):
         registerSlave = internal.RegisterSlaveMessage()
         registerSlave.slave.CopyFrom(self.slave_info)
         registerSlave.version = "1.8.1"
+        registerSlave.resource_version_uuid.value = uuid.uuid1().bytes
 
         self.send(self.masterPID, registerSlave)
 
