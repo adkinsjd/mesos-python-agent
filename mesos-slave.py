@@ -14,6 +14,8 @@ import mesos.mesos_pb2 as mesos
 import psutil
 import subprocess
 import uuid
+import socket
+hostname = socket.gethostname()
 
 parser = argparse.ArgumentParser(description='Apache Mesos Agent.')
 parser.add_argument('--master', type=str, help='URI of the Mesos Master', required=True)
@@ -27,7 +29,7 @@ class AgentProcess(ProtobufProcess):
         self.registeredExecutorList = []
         self.taskList = []
         self.slave_info = mesos.SlaveInfo()
-        self.slave_info.hostname = "127.0.1.1"
+        self.slave_info.hostname = hostname
         self.slave_info.port = args.port
 
         super(AgentProcess, self).__init__(agentID)
@@ -93,15 +95,19 @@ class AgentProcess(ProtobufProcess):
             if(message.task.executor.IsInitialized()):
                 if(message.task.executor.command.environment):
                     for variable in message.task.executor.command.environment.variables:
+                        print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
                 print("Spawning executor with command: ", message.task.executor.command)
                 pid = subprocess.Popen([message.task.executor.command.value],preexec_fn=os.setsid)
             elif(message.task.command.IsInitialized()):
                 if(message.task.command.environment):
                     for variable in message.task.command.environment.variables:
+                        print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
-                print("Spawning executor with command: ", message.task.command.value.strip().replace('"','').split(' '))
-                pid = subprocess.Popen(message.task.command.value.strip().replace('"','').split(' '),preexec_fn=os.setsid)
+
+                clist = message.task.command.value.strip().replace('"','').split(' ')
+                print("Spawning executor with command: ", clist)
+                pid = subprocess.Popen(clist,preexec_fn=os.setsid)
             else:
                 print("ERROR: Asked to launch executor, but no executor to launch")
 
