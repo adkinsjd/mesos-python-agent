@@ -73,14 +73,19 @@ class AgentProcess(ProtobufProcess):
             print("Adding unregistered executor to known executor list")
             #store information about this executor for after it is registered
             executorRegistered = internal.ExecutorRegisteredMessage()
+
             executorRegistered.framework_id.CopyFrom(message.framework.id)
             executorRegistered.framework_info.CopyFrom(message.framework)
+
             if(message.task.executor.IsInitialized()):
                 executorRegistered.executor_info.CopyFrom(message.task.executor)
+            else:
+                executorRegistered.executor_info.executor_id.value = message.task.task_id.value
+                executorRegistered.executor_info.type = mesos.ExecutorInfo.Type.DEFAULT
+
             executorListItem = {}
             executorListItem['registered'] = False
             executorListItem['executor'] = executorRegistered
-            self.registeredExecutorList.append(executorListItem)
 
             # really the executor should be launched with resource limits relative to its task
             # for now I'm just going to spawn it to get the messaging right though
@@ -89,27 +94,36 @@ class AgentProcess(ProtobufProcess):
             os.environ["MESOS_SLAVE_PID"] = str(self.pid)
             os.environ["MESOS_SLAVE_ID"] = str(self.slave_info.id.value)
             os.environ["MESOS_FRAMEWORK_ID"] = str(message.framework.id.value)
-            os.environ["MESOS_EXECUTOR_ID"] = str(message.task.executor.executor_id.value)
             os.environ["MESOS_DIRECTORY"] = "./"
 
             if(message.task.executor.IsInitialized()):
+                print("Task specifies executor")
+                os.environ["MESOS_EXECUTOR_ID"] = str(message.task.executor.executor_id.value)
+
                 if(message.task.executor.command.environment):
                     for variable in message.task.executor.command.environment.variables:
                         print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
+
                 print("Spawning executor with command: ", message.task.executor.command)
                 pid = subprocess.Popen([message.task.executor.command.value],preexec_fn=os.setsid)
+                executorListItem['processPID'] = pid
+
             elif(message.task.command.IsInitialized()):
+                print("No executor specified. Using default executor. Setting executor_id to task id")
+                os.environ["MESOS_EXECUTOR_ID"] = str(message.task.task_id.value)
+
                 if(message.task.command.environment):
                     for variable in message.task.command.environment.variables:
                         print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
 
-                clist = message.task.command.value.strip().replace('"','').split(' ')
-                print("Spawning executor with command: ", clist)
-                pid = subprocess.Popen(clist,preexec_fn=os.setsid)
+                pid = subprocess.Popen(['mesos-executor'], preexec_fn=os.setsid)
+                executorListItem['processPID'] = pid
             else:
                 print("ERROR: Asked to launch executor, but no executor to launch")
+
+            self.registeredExecutorList.append(executorListItem)
 
         for executor in self.registeredExecutorList:
             if(message.task.executor.executor_id == executor['executor'].executor_info.executor_id and executor['registered'] == True):
@@ -137,6 +151,7 @@ class AgentProcess(ProtobufProcess):
     @ProtobufProcess.install(internal.RegisterExecutorMessage)
     def registerExecutor(self, from_pid, message):
         # Find the executor with the same framework and ID)
+        print(message)
         print("Request to register executor ", message.executor_id.value, " on framework ", message.framework_id.value)
 
         success = False
@@ -156,7 +171,9 @@ class AgentProcess(ProtobufProcess):
         if success == True:
             for task in self.taskList:
                 if(task['state'] == "WAITING" and
-                   task['task'].task.executor.executor_id.value == message.executor_id.value and
+                   (task['task'].task.executor.executor_id.value == message.executor_id.value or
+                    (not task['task'].task.executor.IsInitialized() and task['task'].task.task_id.value == message.executor_id.value))
+                       and
                    task['task'].framework.id.value == message.framework_id.value):
 
                     print("Forwarding task ", task['task'].task.task_id.value, " to executor ", message.executor_id.value)
@@ -164,7 +181,7 @@ class AgentProcess(ProtobufProcess):
                     self.send(from_pid, task['task'])
                     task['state'] = "DISPATCHED"
                 elif(task['state'] == 'WAITING'):
-                    print("Task: ", task['task'], "still waiting to be dispatched")
+                    print("Task: ", task['task'].task.task_id.value, "still waiting to be dispatched")
         else:
             print("ERROR: Did not find matching executor to register. Did not spawn this executor")
         print()
@@ -248,11 +265,17 @@ class AgentProcess(ProtobufProcess):
             if(executor['executor'].framework_id.value == message.framework_id.value):
                 shutdownExecutor.executor_id.CopyFrom(executor['executor'].executor_info.executor_id)
                 print("Shutting down executor with PID",executor['pid'])
-                self.send(executor['pid'], shutdownExecutor)
+                pid = executor['pid']
+                print(shutdownExecutor)
+                self.send(pid, shutdownExecutor)
 
                 #remove executor from registered list
                 print("Removing executor from registered list")
                 self.registeredExecutorList.remove(executor)
+
+                #kill the executor subprocess
+                executor['processPID'].kill()
+
         print()
 
     def register(self):
