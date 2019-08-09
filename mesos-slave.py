@@ -118,8 +118,17 @@ class AgentProcess(ProtobufProcess):
                         print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
 
-                pid = subprocess.Popen(['mesos-executor'], preexec_fn=os.setsid)
+                #if MESOS_DEFAULT_EXECUTOR is not an empty string use it
+                pid = None
+                if(os.environ.get('MESOS_EXECUTOR') is None):
+                    print("Executor not set. Assuming mesos-executor in path")
+                    pid = subprocess.Popen(['mesos-executor'], preexec_fn=os.setsid)
+                else:
+                    print("Using MESOS_EXECUTOR:", os.environ['MESOS_EXECUTOR'])
+                    pid = subprocess.Popen([os.environ.get('MESOS_EXECUTOR')], preexec_fn=os.setsid)
+
                 executorListItem['processPID'] = pid
+
             else:
                 print("ERROR: Asked to launch executor, but no executor to launch")
 
