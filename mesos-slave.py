@@ -113,11 +113,6 @@ class AgentProcess(ProtobufProcess):
                 print("No executor specified. Using default executor. Setting executor_id to task id")
                 os.environ["MESOS_EXECUTOR_ID"] = str(message.task.task_id.value)
 
-                if(message.task.command.environment):
-                    for variable in message.task.command.environment.variables:
-                        print("Setting environment variable", variable.name, "to", variable.value)
-                        os.environ[variable.name] = variable.value
-
                 #if MESOS_DEFAULT_EXECUTOR is not an empty string use it
                 pid = None
                 if(os.environ.get('MESOS_EXECUTOR') is None):
@@ -322,19 +317,19 @@ class AgentProcess(ProtobufProcess):
         resource = mesos.Resource()
 
         resource.name = "cpus"
-        resource.type = mesos.Value.Type.SCALAR
+        resource.type = mesos.Value.SCALAR
         resource.scalar.value = psutil.cpu_count()
         resources.append(resource)
 
         resource = mesos.Resource()
         resource.name = "mem"
-        resource.type = mesos.Value.Type.SCALAR
+        resource.type = mesos.Value.SCALAR
         resource.scalar.value = (psutil.virtual_memory().available)/1000000
         resources.append(resource)
 
         resource = mesos.Resource()
         resource.name = "disk"
-        resource.type = mesos.Value.Type.SCALAR
+        resource.type = mesos.Value.SCALAR
         resource.scalar.value = (psutil.disk_usage('/').free)/1000000
         resources.append(resource)
 
@@ -344,7 +339,7 @@ class AgentProcess(ProtobufProcess):
 if __name__ == '__main__':
 
     print("Starting agent context")
-    agentContext = Context(ip="127.0.1.1", port=args.port)
+    agentContext = Context(ip="127.0.0.1", port=args.port)
     agentContext.start()
 
     masterPID = PID.from_string('master@' + args.master)
