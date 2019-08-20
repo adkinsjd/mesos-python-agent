@@ -47,18 +47,45 @@ class ExecutorProcess(ProtobufProcess):
         else:
             self.slaveID = os.environ.get("MESOS_SLAVE_ID")
 
+        self.registered = False
+
         super(ExecutorProcess, self).__init__(executorID)
+
+        self.register()
 
     @ProtobufProcess.install(internal.RunTaskMessage)
     def runTask(self, from_pid, message):
-        pass
+
+        # If I'm getting this it must be a command task. Check if that is true
+        if(not message.task.command.IsInitialized()):
+            print("Default executor only made to run command tasks!")
+            print("Ignoring non command task")
+            return
+
+        #Now set up any environment variables for the command task
+        if(message.task.command.environment.variables.IsInitialized()):
+            for var in message.task.command.environment.variables:
+                os.environ[var.name] = var.value
+
+        #Now run the command specified in the task
+        print(message.task.command.value)
+
 
     @ProtobufProcess.install(internal.ExecutorRegisteredMessage)
     def executorRegistered(self, from_pid, message):
-        pass
+        #catch the executor registered message
+        print("Registration successful")
+        self.registered = True
 
     def register(self):
-        pass
+        #build a registerExecutor message
+        print("Registering executor with slave")
+        registerExecutor = internal.RegisterExecutorMessage()
+        registerExecutor.framework_id.value = self.frameworkID
+        registerExecutor.executor_id.value = self.frameworkID
+
+        #send register executor to slave
+        self.send(self.slavePID, registerExecutor)
 
 if __name__ == '__main__':
     print("Starting executor context")
