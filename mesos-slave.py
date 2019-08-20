@@ -100,7 +100,7 @@ class AgentProcess(ProtobufProcess):
                 print("Task specifies executor")
                 os.environ["MESOS_EXECUTOR_ID"] = str(message.task.executor.executor_id.value)
 
-                if(message.task.executor.command.environment):
+                if(message.task.executor.command.environment.IsInitialized()):
                     for variable in message.task.executor.command.environment.variables:
                         print("Setting environment variable", variable.name, "to", variable.value)
                         os.environ[variable.name] = variable.value
