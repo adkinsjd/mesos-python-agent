@@ -39,7 +39,7 @@ class ExecutorProcess(ProtobufProcess):
             print("MESOS_SLAVE_PID must be defined")
             sys.exit(1)
         else:
-            self.slavePID = os.environ.get("MESOS_SLAVE_PID")
+            self.slavePID = PID.from_string(os.environ.get("MESOS_SLAVE_PID"))
 
         if(os.environ.get("MESOS_SLAVE_ID") is None):
             print("MESOS_SLAVE_ID must be defined")
@@ -49,12 +49,12 @@ class ExecutorProcess(ProtobufProcess):
 
         self.registered = False
 
-        super(ExecutorProcess, self).__init__(executorID)
-
-        self.register()
+        super(ExecutorProcess, self).__init__(self.executorID)
 
     @ProtobufProcess.install(internal.RunTaskMessage)
     def runTask(self, from_pid, message):
+
+        print("Received run task message from framework", message.framework_id.value)
 
         # If I'm getting this it must be a command task. Check if that is true
         if(not message.task.command.IsInitialized()):
@@ -63,12 +63,14 @@ class ExecutorProcess(ProtobufProcess):
             return
 
         #Now set up any environment variables for the command task
-        if(message.task.command.environment.variables.IsInitialized()):
+        if(message.task.command.environment.IsInitialized()):
             for var in message.task.command.environment.variables:
                 os.environ[var.name] = var.value
 
         #Now run the command specified in the task
-        print(message.task.command.value)
+        clist = message.task.command.value.strip().replace('"','').split(' ')
+        print("Executing task command:", clist)
+        pid = subprocess.Popen(clist)
 
 
     @ProtobufProcess.install(internal.ExecutorRegisteredMessage)
@@ -82,7 +84,7 @@ class ExecutorProcess(ProtobufProcess):
         print("Registering executor with slave")
         registerExecutor = internal.RegisterExecutorMessage()
         registerExecutor.framework_id.value = self.frameworkID
-        registerExecutor.executor_id.value = self.frameworkID
+        registerExecutor.executor_id.value = self.executorID
 
         #send register executor to slave
         self.send(self.slavePID, registerExecutor)
@@ -95,7 +97,7 @@ if __name__ == '__main__':
     executorProcess = ExecutorProcess()
 
     print("Spawning executor process")
-    executorPID = Context.spawn(executorProcess)
+    executorPID = executorContext.spawn(executorProcess)
 
 
     print("Sending executor registration message")
