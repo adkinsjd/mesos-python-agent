@@ -15,6 +15,7 @@ import psutil
 import subprocess
 import uuid
 import socket
+import time
 hostname = socket.gethostname()
 
 parser = argparse.ArgumentParser(description='Apache Mesos default executor.')
@@ -67,10 +68,38 @@ class ExecutorProcess(ProtobufProcess):
             for var in message.task.command.environment.variables:
                 os.environ[var.name] = var.value
 
+        #construct task status update message
+        update = internal.StatusUpdateMessage()
+        update.pid = str(self.pid)
+        update.update.framework_id.value = self.frameworkID
+        update.update.executor_id.value = self.executorID
+        update.update.slave_id.value = self.slaveID
+        update.update.status.task_id.value = message.task.task_id.value
+        update.update.status.state = mesos.TaskState.TASK_STARTING
+        update.update.status.slave_id.value = self.slaveID
+        time_now = time.time()
+        update.update.status.timestamp = time_now
+        update.update.status.executor_id.value = self.executorID
+        update.update.status.source = mesos.TaskStatus.Source.SOURCE_EXECUTOR
+        new_uuid = uuid.uuid1().bytes
+        update.update.status.uuid = new_uuid
+        update.update.uuid = new_uuid
+        update.update.timestamp = time_now
+
+        self.send(from_pid, update)
+
         #Now run the command specified in the task
         clist = message.task.command.value.strip().replace('"','').split(' ')
         print("Executing task command:", clist)
         pid = subprocess.Popen(clist)
+
+        update.update.status.state = mesos.TaskState.TASK_RUNNING
+        self.send(from_pid, update)
+
+    @ProtobufProcess.install(internal.StatusUpdateAcknowledgementMessage)
+    def statusUpdateAcknowledgement(self, from_pid, message):
+        # for now just log these. Really there is probably some reliability process here
+        print("Received status update acknowledgment from", from_pid)
 
 
     @ProtobufProcess.install(internal.ExecutorRegisteredMessage)

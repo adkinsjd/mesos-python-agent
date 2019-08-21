@@ -196,7 +196,7 @@ class AgentProcess(ProtobufProcess):
 
         # We also forward the status updates to the master
 
-        print("Received status update for task ", message.update.status.task_id.value, "with state", message.update.status.state)
+        print("Received status update for task", message.update.status.task_id.value, "with state", message.update.status.state)
         ack = internal.StatusUpdateAcknowledgementMessage()
         ack.slave_id.CopyFrom(message.update.slave_id)
         ack.framework_id.CopyFrom(message.update.framework_id)
@@ -205,7 +205,9 @@ class AgentProcess(ProtobufProcess):
 
         #find the task in our task list
         for task in self.taskList:
-            if(task['task'].task.executor.executor_id.value == message.update.executor_id.value and
+            if((task['task'].task.executor.executor_id.value == message.update.executor_id.value or
+                task['task'].task.task_id.value == message.update.executor_id.value)
+                and
                task['task'].framework.id.value == message.update.framework_id.value and
                task['task'].task.task_id.value == message.update.status.task_id.value):
 
