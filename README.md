@@ -19,3 +19,26 @@ code on embedded nodes.
 Mocking this all up in python as opposed to diving in on embedded C would significantly
 speed up architecture exploration. Once something is working then it can be implemented
 in embedded C.
+
+## Getting Started
+
+1. Clone this repository
+
+> git clone --recursive https://github.com/jdadkins/mesos-python-agent.git
+
+2. Install protobuf
+
+> sudo apt-get install protobuf-compiler
+
+3. Install compactor (this will change soon)
+
+> pip3 install compactor
+
+4. Run the Mesos slave (MPORT is Mesos Master port, LPORT is Local Slave port)
+
+> ./mesos-slave.py --master=IP.OF.MS.TR:MPORT --port=LPORT
+
+## Todo
+
+- Copy (or script to pull) Mesos Protobuf files to prevent having to clone entire repo
+- Modify Compactor to allow for devices behind NAT (i.e. differing local + public IPs)
