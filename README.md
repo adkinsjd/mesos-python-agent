@@ -25,6 +25,7 @@ in embedded C.
 1. Clone this repository
 
 > git clone --recursive https://github.com/jdadkins/mesos-python-agent.git
+> cd mesos-python-agent
 
 2. Install protobuf
 
@@ -34,7 +35,11 @@ in embedded C.
 
 > pip3 install compactor
 
-4. Run the Mesos slave (MPORT is Mesos Master port, LPORT is Local Slave port)
+4. Make the protobufs modules
+
+> make all
+
+5. Run the Mesos slave (MPORT is Mesos Master port, LPORT is Local Slave port)
 
 > ./mesos-slave.py --master=IP.OF.MS.TR:MPORT --port=LPORT
 
