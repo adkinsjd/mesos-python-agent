@@ -24,7 +24,7 @@ in embedded C.
 
 1. Clone this repository
 
-> git clone --recursive https://github.com/jdadkins/mesos-python-agent.git
+> git clone --recursive https://github.com/jdadkins/mesos-python-agent.git  
 > cd mesos-python-agent
 
 2. Install protobuf
