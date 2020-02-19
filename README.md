@@ -22,23 +22,25 @@ in embedded C.
 
 ## Getting Started
 
-1. Clone this repository
-
-> git clone --recursive https://github.com/adkinsjd/mesos-python-agent.git  
-> cd mesos-python-agent
-
-2. Install protobuf 3.11
+1. Install protobuf 3.11
 
 If you are running on a newer system then:
-> sudo apt-get install protobuf-compiler
+> sudo apt-get install protobuf-compiler  
 > pip3 install protobuf
 
 Otherwise download a binary from https://github.com/protocolbuffers/protobuf/releases
 
-3. Install a modified version of compactor
+2. Install a modified version of compactor
 
-> git clone https://github.com/adkinsjd/compactor.git
-> python3 setup.py install
+> git clone https://github.com/adkinsjd/compactor.git  
+> cd compactor  
+> sudo python3 setup.py install  
+> cd ..
+
+3. Clone this repository
+
+> git clone --recursive https://github.com/adkinsjd/mesos-python-agent.git  
+> cd mesos-python-agent
 
 4. Make the protobufs modules
 
@@ -49,14 +51,13 @@ Otherwise download a binary from https://github.com/protocolbuffers/protobuf/rel
 If you have a public IP address, but you cannot bind to, let the receiver
 of your messages know where to respond (currently libprocess does not work through a NAT)
 
-> export LIBPORCESS_ADVERTIS_IP=<your_public_IP>
-> export LIBPORCESS_ADVERTIS_PORT=<your_public_port>
+> export LIBPROCESS_ADVERTISE_IP=<your_public_IP>  
+> export LIBPROCESS_ADVERTISE_PORT=<your_public_port>
 
-5. Run the Mesos slave (MPORT is Mesos Master port, LPORT is Local Slave port)
+5. Run the Mesos slave (substitute the command with Mesos Master IP, Mesos Master port, and Local Slave port)
 
-> ./mesos-slave.py --master=IP.OF.MS.TR:MPORT --port=LPORT
+> ./mesos-slave.py --master=<mesos_master_ip>:<mesos_master_port> --port=<local_port_to_bind>
 
 ## Todo
 
 - Copy (or script to pull) Mesos Protobuf files to prevent having to clone entire repo
-- Modify Compactor to allow for devices behind NAT (i.e. differing local + public IPs)
