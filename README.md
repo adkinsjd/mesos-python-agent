@@ -27,9 +27,12 @@ in embedded C.
 > git clone --recursive https://github.com/adkinsjd/mesos-python-agent.git  
 > cd mesos-python-agent
 
-2. Install protobuf
+2. Install protobuf 3.11
 
+If you are running on a newer system then:
 > sudo apt-get install protobuf-compiler
+
+Otherwise download a binary from https://github.com/protocolbuffers/protobuf/releases
 
 3. Install a modified version of compactor
 
