@@ -24,20 +24,29 @@ in embedded C.
 
 1. Clone this repository
 
-> git clone --recursive https://github.com/jdadkins/mesos-python-agent.git  
+> git clone --recursive https://github.com/adkinsjd/mesos-python-agent.git  
 > cd mesos-python-agent
 
 2. Install protobuf
 
 > sudo apt-get install protobuf-compiler
 
-3. Install compactor (this will change soon)
+3. Install a modified version of compactor
 
-> pip3 install compactor
+> git clone https://github.com/adkinsjd/compactor.git
+> python3 setup.py install
 
 4. Make the protobufs modules
 
 > make all
+
+5. Setup external IP (optional)
+
+If you have a public IP address, but you cannot bind to, let the receiver
+of your messages know where to respond (currently libprocess does not work through a NAT)
+
+> export LIBPORCESS_ADVERTIS_IP=<your_public_IP>
+> export LIBPORCESS_ADVERTIS_PORT=<your_public_port>
 
 5. Run the Mesos slave (MPORT is Mesos Master port, LPORT is Local Slave port)
 
