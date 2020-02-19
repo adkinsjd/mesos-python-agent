@@ -341,7 +341,7 @@ class AgentProcess(ProtobufProcess):
 if __name__ == '__main__':
 
     print("Starting agent context")
-    agentContext = Context(ip="127.0.0.1", port=args.port)
+    agentContext = Context(port=args.port)
     agentContext.start()
 
     masterPID = PID.from_string('master@' + args.master)

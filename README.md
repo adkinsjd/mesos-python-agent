@@ -31,6 +31,7 @@ in embedded C.
 
 If you are running on a newer system then:
 > sudo apt-get install protobuf-compiler
+> pip3 install protobuf
 
 Otherwise download a binary from https://github.com/protocolbuffers/protobuf/releases
 
