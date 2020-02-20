@@ -116,11 +116,12 @@ class ExecutorProcess(ProtobufProcess):
         registerExecutor.executor_id.value = self.executorID
 
         #send register executor to slave
+        print("Sending register executor to: {}".format(self.slavePID))
         self.send(self.slavePID, registerExecutor)
 
 if __name__ == '__main__':
     print("Starting executor context")
-    executorContext = Context(ip="127.0.1.1")
+    executorContext = Context()
     executorContext.start()
 
     executorProcess = ExecutorProcess()
